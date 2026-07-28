@@ -1,8 +1,10 @@
 const express = require("express")
 const zod = require("zod")
 const jwt = require("jsonwebtoken")
-const JWT_SECRET = require("./config.js")
-const db = require("./db.js")
+const JWT_SECRET = require("../config.js")
+const db = require("../db.js")
+const bcrypt = require("bcrypt")
+const { authMiddleware } = require("../middleware.js")
 
 const router = express.Router()
 
@@ -13,7 +15,7 @@ const signupSchema = zod.object({
     password: zod.string()
 })
 
-router.post("/signup", async (req, res) => {
+router.post("/signup", authMiddleware, async (req, res) => {
     const username = req.body.username;
     const firstName = req.body.firstName;
     const lastName = req.body.lastName;
@@ -27,7 +29,9 @@ router.post("/signup", async (req, res) => {
         })
     }
 
-    const userExist = await db.users.findOne({ username: username })
+    const hashedPassword = await bcrypt.hash(password, 10)
+
+    const userExist = await db.Users.findOne({ username: username })
 
     if(userExist) {
         return res.json({
@@ -35,11 +39,11 @@ router.post("/signup", async (req, res) => {
         })
     }
 
-    await db.users.insertOne({
+    await db.Users.insertOne({
         username: username,
         firstName: firstName,
         lastName: lastName,
-        password: password
+        password: hashedPassword
     })
 
     res.json({
@@ -52,7 +56,7 @@ const signinSchema = zod.object({
     password: zod.string()
 })
 
-router.post("/signin", async (req, res) => {
+router.post("/signin", authMiddleware, async (req, res) => {
 
     
     const username = req.body.username;
@@ -63,6 +67,14 @@ router.post("/signin", async (req, res) => {
     if(!result.success) {
         return res.json({
             message: "invalid input"
+        })
+    }
+
+    const valid = await bcrypt.compare(password, hashedPassword)
+
+    if(!valid) {
+        return res.json({
+            message: "invalid password"
         })
     }
 
@@ -85,6 +97,32 @@ router.post("/signin", async (req, res) => {
         message: "user logged in successfully",
         token
     })
+})
+
+const updateBody = zod.object({
+    password: zod.string().opional(),
+    firstName: zod.string().optional(),
+    lastName: zod.string().optional()
+})
+
+router.put("/", authMiddleware, async (req, res) => {
+    const result = updateBody.safePrase(req.body)
+
+    if(!result.success) {
+        return res.json({
+            message: "invalid input"
+        })
+    }
+
+    await db.Users.updateOne({
+        id: req.userId
+    })
+
+
+    res.json({
+        message: "info updated"
+    })
+
 })
 
 module.exports = router
