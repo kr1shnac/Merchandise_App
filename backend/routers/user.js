@@ -46,6 +46,11 @@ router.post("/signup", authMiddleware, async (req, res) => {
         password: hashedPassword
     })
 
+    await Account.create({
+        userId,
+        balance: 1 + Math.random() * 10000
+    })
+
     res.json({
         message: username + " user created"
     })
@@ -56,6 +61,7 @@ const signinSchema = zod.object({
     password: zod.string()
 })
 
+//login
 router.post("/signin", authMiddleware, async (req, res) => {
 
     
@@ -123,6 +129,32 @@ router.put("/", authMiddleware, async (req, res) => {
         message: "info updated"
     })
 
+})
+
+//search query 
+router.get("/find", (req, res) => {
+    const filter = req.query.filter
+
+    const user = await db.Users.find({
+        $or: [{
+            firstName: {
+                "$regex": filter 
+            }
+        }, {
+            lastName: {
+                "$regex": filter
+            }
+        }]
+    })
+
+    res.json({
+        user: user.map(user => ({
+            username: user.username,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            _id: user._id
+        }))
+    })
 })
 
 module.exports = router

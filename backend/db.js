@@ -11,5 +11,17 @@ const userSchema = new Schema ({
     password: {type: String, required: true},
 })
 
+const accountSchema = new Schema ({
+    userId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Users',
+        required: true
+    },
+    balance: {
+        type: Number,
+        required: true
+    }
+})
+
 module.exports = mongoose.model("Users", userSchema)
-//
+module.exports = mongoose.model("Account", accountSchema)
