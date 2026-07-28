@@ -2,14 +2,15 @@ const express = require("express")
 const zod = require("zod")
 const jwt = require("jsonwebtoken")
 const JWT_SECRET = require("./config.js")
+const db = require("./db.js")
 
 const router = express.Router()
 
 const signupSchema = zod.object({
-    username = zod.string(),
-    firstName = zod.string(),
-    lastName = zod.string(),
-    password = zod.string()
+    username: zod.string(),
+    firstName: zod.string(),
+    lastName: zod.string(),
+    password: zod.string()
 })
 
 router.post("/signup", async (req, res) => {
@@ -18,15 +19,15 @@ router.post("/signup", async (req, res) => {
     const lastName = req.body.lastName;
     const password = req.body.password;
 
-    const success = signupSchema.safeParse(req.body);
+    const result = signupSchema.safeParse(req.body);
 
-    if(!success) {
+    if(!result.success) {
         return res.json({
             message: "invalid input"
         })
     }
 
-    const userExist = await db.users.find({ username: username })
+    const userExist = await db.users.findOne({ username: username })
 
     if(userExist) {
         return res.json({
@@ -34,7 +35,7 @@ router.post("/signup", async (req, res) => {
         })
     }
 
-    await db.user.insertOne({
+    await db.users.insertOne({
         username: username,
         firstName: firstName,
         lastName: lastName,
@@ -47,17 +48,19 @@ router.post("/signup", async (req, res) => {
 })
 
 const signinSchema = zod.object({
-    username = zod.string(),
-    password = zod.string()
+    username: zod.string(),
+    password: zod.string()
 })
 
 router.post("/signin", async (req, res) => {
+
+    
     const username = req.body.username;
     const password = req.body.password;
 
-    const success = signinSchema.safeParse(req.body)
+    const result = signinSchema.safeParse(req.body)
 
-    if(!success) {
+    if(!result.success) {
         return res.json({
             message: "invalid input"
         })
