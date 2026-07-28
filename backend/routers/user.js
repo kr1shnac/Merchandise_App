@@ -1,14 +1,32 @@
 const express = require("express")
+const zod = require("zod")
+const jwt = require("jsonwebtoken")
+const JWT_SECRET = require("./config.js")
 
 const router = express.Router()
 
-router.post("/signup", (req, res) => {
+const signupSchema = zod.object({
+    username = zod.string(),
+    firstName = zod.string(),
+    lastName = zod.string(),
+    password = zod.string()
+})
+
+router.post("/signup", async (req, res) => {
     const username = req.body.username;
     const firstName = req.body.firstName;
     const lastName = req.body.lastName;
     const password = req.body.password;
 
-    const userExist = db.users.find({ username: username })
+    const success = signupSchema.safeParse(req.body);
+
+    if(!success) {
+        return res.json({
+            message: "invalid input"
+        })
+    }
+
+    const userExist = await db.users.find({ username: username })
 
     if(userExist) {
         return res.json({
@@ -16,29 +34,46 @@ router.post("/signup", (req, res) => {
         })
     }
 
-    db.user.insertOne({
+    await db.user.insertOne({
         username: username,
         firstName: firstName,
         lastName: lastName,
         password: password
     })
 
+    const user = jwt.sign({
+        userId: user._id
+    }, JWT_SECRET)
+
     res.json({
         message: username + " user created"
     })
 })
 
-router.post("/signin", (req, res) => {
+const signinSchema = zod.object({
+    username = zod.string(),
+    password = zod.string()
+})
+
+router.post("/signin", async (req, res) => {
     const username = req.body.username;
     const password = req.body.password;
 
-    const userExist = db.users.findOne({
+    const success = signinSchema.safeParse(req.body)
+
+    if(!success) {
+        return res.json({
+            message: "invalid input"
+        })
+    }
+
+    const userExist = await db.users.findOne({
         username: username,
         password: password
     })
 
     if(!userExist) {
-        return res.json({
+        return res.status(411).json({
             message: username + " user doesn't exist"
         })
     }
