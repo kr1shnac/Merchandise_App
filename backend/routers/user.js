@@ -41,10 +41,6 @@ router.post("/signup", async (req, res) => {
         password: password
     })
 
-    const user = jwt.sign({
-        userId: user._id
-    }, JWT_SECRET)
-
     res.json({
         message: username + " user created"
     })
@@ -67,16 +63,20 @@ router.post("/signin", async (req, res) => {
         })
     }
 
-    const userExist = await db.users.findOne({
+    const user = await db.users.findOne({
         username: username,
         password: password
     })
 
-    if(!userExist) {
+    if(!user) {
         return res.status(411).json({
             message: username + " user doesn't exist"
         })
     }
+
+    const user = jwt.sign({
+        userId: user._id
+    }, JWT_SECRET)
 
     res.status(200).json({
         message: "user logged in successfully"
