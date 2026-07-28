@@ -1,6 +1,7 @@
 const express = require("express");
 const { authMiddleware } = require("../middleware.js")
 const router = express.Router();
+const db = require("../db.js")
 
 router.get("/balance", authMiddleware, async (req, res) => {
     userId = req.userId

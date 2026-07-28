@@ -4,7 +4,7 @@ const jwt = require("jsonwebtoken")
 const JWT_SECRET = require("../config.js")
 const db = require("../db.js")
 const bcrypt = require("bcrypt")
-const { authMiddleware } = require("../middleware.js")
+const authMiddleware = require("../middleware.js")
 
 const router = express.Router()
 
@@ -15,7 +15,7 @@ const signupSchema = zod.object({
     password: zod.string()
 })
 
-router.post("/signup", authMiddleware, async (req, res) => {
+router.post("/signup", async (req, res) => {
     const username = req.body.username;
     const firstName = req.body.firstName;
     const lastName = req.body.lastName;
@@ -62,7 +62,7 @@ const signinSchema = zod.object({
 })
 
 //login
-router.post("/signin", authMiddleware, async (req, res) => {
+router.post("/signin", async (req, res) => {
 
     
     const username = req.body.username;
@@ -132,10 +132,10 @@ router.put("/", authMiddleware, async (req, res) => {
 })
 
 //search query 
-router.get("/find", (req, res) => {
+router.get("/find", async (req, res) => {
     const filter = req.query.filter
 
-    const user = await db.Users.find({
+    const user = await db.Users.findOne({
         $or: [{
             firstName: {
                 "$regex": filter 
