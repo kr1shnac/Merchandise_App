@@ -39,15 +39,15 @@ router.post("/signup", async (req, res) => {
         })
     }
 
-    await db.Users.insertOne({
+    const user = await db.Users.create({
         username: username,
         firstName: firstName,
         lastName: lastName,
         password: hashedPassword
     })
 
-    await Account.create({
-        userId,
+    await db.Account.create({
+        userId: user._id,
         balance: 1 + Math.random() * 10000
     })
 
@@ -76,22 +76,21 @@ router.post("/signin", async (req, res) => {
         })
     }
 
-    const valid = await bcrypt.compare(password, hashedPassword)
-
-    if(!valid) {
-        return res.json({
-            message: "invalid password"
-        })
-    }
-
-    const user = await db.users.findOne({
-        username: username,
-        password: password
+    const user = await db.Users.findOne({
+        username: username
     })
 
     if(!user) {
         return res.status(411).json({
-            message: username + " user doesn't exist"
+            message: username + "user doesn't exist"
+        })
+    }
+
+    const valid = await bcrypt.compare(password, user.password)
+
+    if(!valid) {
+        return res.status(411).json({
+            message: "password is invalid"
         })
     }
 
@@ -106,13 +105,13 @@ router.post("/signin", async (req, res) => {
 })
 
 const updateBody = zod.object({
-    password: zod.string().opional(),
+    password: zod.string().optional(),
     firstName: zod.string().optional(),
     lastName: zod.string().optional()
 })
 
 router.put("/", authMiddleware, async (req, res) => {
-    const result = updateBody.safePrase(req.body)
+    const result = updateBody.safeParse(req.body)
 
     if(!result.success) {
         return res.json({
@@ -121,7 +120,9 @@ router.put("/", authMiddleware, async (req, res) => {
     }
 
     await db.Users.updateOne({
-        id: req.userId
+        _id: req.userId
+    }, {
+        $set: { firstName: req.body.firstName, lastName: req.body.lastName, password: req.body.password}
     })
 
 
@@ -135,14 +136,14 @@ router.put("/", authMiddleware, async (req, res) => {
 router.get("/find", async (req, res) => {
     const filter = req.query.filter
 
-    const user = await db.Users.findOne({
+    const user = await db.Users.find({
         $or: [{
             firstName: {
-                "$regex": filter 
+                "$regex": filter, "$options" : "i"
             }
         }, {
             lastName: {
-                "$regex": filter
+                "$regex": filter, "$options" : "i" //even to search lowercase
             }
         }]
     })
