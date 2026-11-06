@@ -98,11 +98,16 @@ What the responses actually look like:
   after registering. I never got around to returning both.
 - `signin` returns `{ message, token }`.
 - `balance` returns `{ balance }` — a plain number.
-- `transfer` returns `{ message: "transaction successful" }` on success, or
-  `{ message: "insufficient balance" }` / `"invalid to-account"` on the failure paths,
-  still with HTTP 200.
+- `transfer` returns `{ message: "transaction successful" }` on success. The failure
+  paths use real status codes: `400` for malformed input or a self-transfer, `409` for
+  insufficient balance, `404` for an unknown sender or recipient, `500` if the
+  transaction itself throws.
 - `find` returns `{ user: [{ username, firstName, lastName, _id }] }` for everyone
   whose first *or* last name matches, case-insensitively. No pagination.
+
+`amount` must be a **positive number**. Zero, negatives and numeric strings are all
+rejected before a transaction session is even opened, so there's no way to credit
+yourself by sending a negative amount.
 
 To check the whole thing works end to end:
 
@@ -121,7 +126,14 @@ curl localhost:3000/api/v1/account/balance -H "token: $TOKEN"
 ## How a transfer works
 
 `POST /account/transfer` is the only route with real logic in it, and it's the reason
-this project exists. It opens a Mongoose session and does everything inside it:
+this project exists.
+
+First, before any session is opened, the body is validated with Zod (`to` a
+non-empty string, `amount` a positive number) and a transfer to yourself is rejected.
+That keeps the transaction path short and means bad input never gets near a database
+session at all.
+
+Then it opens a Mongoose session and does everything inside it:
 
 1. look up the sender's account
 2. check the sender has enough money
@@ -132,8 +144,8 @@ this project exists. It opens a Mongoose session and does everything inside it:
 
 If any step throws, or any check fails, the session is aborted and rolled back, so
 money is never half-moved. Steps 1–3 call `abortTransaction()` and return directly;
-an unexpected error in 4–5 lands in the `catch` block, which aborts and returns
-`{ message: "transaction failed", error }`. Either way `finally` ends the session.
+an unexpected error in 4–5 lands in the `catch` block, which aborts and returns a
+`500`. Either way `finally` ends the session.
 
 Notably *not* recorded: anything about the transfer itself. There is no Transaction
 collection and no history endpoint. Only the two balance numbers change.
@@ -162,28 +174,30 @@ fixed value or a signup parameter.
 
 ## Rough edges
 
-Things I know about and haven't fixed. Listing them because a clean-looking README
-that hides them is worse than useless.
+Fixed since the first version of this list: negative `amount` values, self-transfers,
+the unhashed password on `PUT /user/`, and the all-HTTP-200 error handling on
+`balance` / `transfer` / update.
+
+Still here:
 
 - `JWT_SECRET` is the string `"krishna"`, hardcoded in `backend/config.js`. Fine for
-  localhost, an actual problem the moment this is deployed.
+  localhost, an actual problem the moment this is deployed. Moving it to an env var
+  means deciding how the app behaves with no secret set, which I didn't want to
+  decide for you.
 - The Mongo URI is hardcoded in `db.js`. There is no `.env` file and no `dotenv`.
 - CORS is pinned to `http://localhost:5173`, so the deployed frontend (if any) can't
   talk to it.
-- **`transfer` doesn't validate `amount`.** It only checks `balance < amount`, so a
-  negative amount sails through and *increases* your balance. This is the one I'd
-  fix first.
-- You can transfer to yourself. The debit and credit cancel out, but the request is
-  still accepted.
-- `PUT /user/` writes `password` back with `$set` unhashed, unlike signup. Updating
-  your password therefore breaks sign-in for that account. `firstName`/`lastName`
-  passed as undefined get stripped by Mongoose, but a supplied password doesn't.
-- Error responses are almost all HTTP 200 with a `message` field. Only `signin`
-  bothers with a real status code, and it uses 411 for both "no such user" and "wrong
-  password".
-- `signup` doesn't return a token.
+- `signup` doesn't return a token, so the client has to sign in again right after
+  registering.
 - `GET /user/find` is public, unauthenticated, and hands out usernames + ids to
-  anyone who asks.
+  anyone who asks. It's also a user-supplied regex, so it's open to ReDoS.
+- `signin` returns `411` for both "no such user" and "wrong password", which leaks
+  which usernames exist.
+- Validation failures on `signup`, `signin` and `find` still answer with HTTP 200 and
+  a `message` field, unlike the routes above.
+- The `500` path on `transfer` returns `err.message` straight to the client, which
+  leaks internal detail.
+- Starting balance is `1 + Math.random() * 10000`, not a fixed value or a parameter.
 - `mongoose.connect()` isn't awaited and has no error handler, so a missing mongod
   surfaces as an unhandled rejection rather than a clear message.
 
@@ -208,6 +222,6 @@ So: the API is testable today with curl or Postman, and the UI has to be built.
 
 - No tests, no CI, no Docker, no rate limiting, and no LICENSE file — so as it stands
   it's all-rights-reserved rather than open source.
-- The backend `.gitignore` excludes exactly one line, `/node_modules`, and nothing
-  else. Neither `.gitignore` mentions `.env`, which matters the day someone moves
-  the secret out of `config.js` into one.
+- Both `.gitignore`s now cover `.env` (with a `.env.example` exemption), so the day
+  someone moves the secret out of `config.js` into one, the secret itself won't get
+  committed.

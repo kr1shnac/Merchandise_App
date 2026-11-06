@@ -114,19 +114,39 @@ router.put("/", authMiddleware, async (req, res) => {
     const result = updateBody.safeParse(req.body)
 
     if(!result.success) {
-        return res.json({
+        return res.status(400).json({
             message: "invalid input"
+        })
+    }
+
+    // build the $set from what was actually sent, otherwise Mongoose will
+    // happily write undefined over a field the user never touched
+    const updates = {}
+
+    if(req.body.firstName) {
+        updates.firstName = req.body.firstName
+    }
+    if(req.body.lastName) {
+        updates.lastName = req.body.lastName
+    }
+    if(req.body.password) {
+        updates.password = await bcrypt.hash(req.body.password, 10)
+    }
+
+    if(Object.keys(updates).length === 0) {
+        return res.status(400).json({
+            message: "nothing to update"
         })
     }
 
     await db.Users.updateOne({
         _id: req.userId
     }, {
-        $set: { firstName: req.body.firstName, lastName: req.body.lastName, password: req.body.password}
+        $set: updates
     })
 
 
-    res.json({
+    res.status(200).json({
         message: "info updated"
     })
 
